@@ -1,34 +1,35 @@
 import { NextRequest, NextResponse } from "next/server";
 import { google } from "googleapis";
 
-// 環境変数からサービスアカウントの認証情報を読み込む
-const serviceAccountKey = process.env.GOOGLE_SERVICE_ACCOUNT_KEY;
-
 const GRAY_COLOR = {
     red: 0.3,
     green: 0.3,
     blue: 0.3,
 };
 
-// 🌟 修正ポイント: サーバー起動時に認証情報がない場合は明確にエラーを出す
-if (!serviceAccountKey) {
-    // 認証情報がない場合は、サーバー起動時にエラーを出す
+// serviceAccountKey の代わりに parsedCredentials を使用します
+let parsedCredentials: any;
+
+// 環境変数からサービスアカウントキーを取得し、Base64デコードしてパースします。
+const encodedKey = process.env.GOOGLE_SERVICE_ACCOUNT_KEY;
+
+if (!encodedKey) {
     throw new Error(
-        "GOOGLE_SERVICE_ACCOUNT_KEY environment variable is not set."
+        "Service Account Key is missing. Set GOOGLE_SERVICE_ACCOUNT_KEY in your .env.local file."
     );
 }
 
 // 認証情報をパース
-let parsedCredentials: any;
 try {
     // -------------------------------------------------------------------
     // 🛠️ 修正ポイント: Base64デコードを試みる
     // .envファイルでの改行・特殊文字のエスケープ問題を回避するため、
     // 環境変数をBase64エンコードされたJSONと仮定します。
-    const decodedKey = Buffer.from(serviceAccountKey, "base64").toString(
-        "utf8"
-    );
+    // ※ エラーの根本原因は環境変数の値にある可能性が高いです。
+    //   このロジック自体は意図通りBase64デコードを行っています。
+    const decodedKey = Buffer.from(encodedKey, "base64").toString("utf8");
     parsedCredentials = JSON.parse(decodedKey);
+
     // -------------------------------------------------------------------
 } catch (e) {
     // パース失敗時、エラーメッセージをより具体的に出力します
@@ -54,7 +55,7 @@ export async function POST(request: NextRequest) {
 
         // 認証情報のセットアップ
         const auth = new google.auth.GoogleAuth({
-            credentials: parsedCredentials,
+            credentials: parsedCredentials, // パース済みの認証情報を使用
             scopes: ["https://www.googleapis.com/auth/spreadsheets"],
         });
 
