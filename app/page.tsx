@@ -1,65 +1,239 @@
-import Image from "next/image";
+"use client";
+
+import { useState, ChangeEvent, FormEvent, useRef } from "react";
+import Papa from "papaparse";
+
+interface FormDataState {
+    file: File | null;
+    url: string;
+    error: string | null;
+    projectIDList: string[] | null;
+}
 
 export default function Home() {
-  return (
-    <div className="flex min-h-screen items-center justify-center bg-zinc-50 font-sans dark:bg-black">
-      <main className="flex min-h-screen w-full max-w-3xl flex-col items-center justify-between py-32 px-16 bg-white dark:bg-black sm:items-start">
-        <Image
-          className="dark:invert"
-          src="/next.svg"
-          alt="Next.js logo"
-          width={100}
-          height={20}
-          priority
-        />
-        <div className="flex flex-col items-center gap-6 text-center sm:items-start sm:text-left">
-          <h1 className="max-w-xs text-3xl font-semibold leading-10 tracking-tight text-black dark:text-zinc-50">
-            To get started, edit the page.tsx file.
-          </h1>
-          <p className="max-w-md text-lg leading-8 text-zinc-600 dark:text-zinc-400">
-            Looking for a starting point or more instructions? Head over to{" "}
-            <a
-              href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Templates
-            </a>{" "}
-            or the{" "}
-            <a
-              href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Learning
-            </a>{" "}
-            center.
-          </p>
+    const [formData, setFormData] = useState<FormDataState>({
+        file: null,
+        url: "",
+        error: null,
+        projectIDList: null,
+    });
+    const fileInputRef = useRef<HTMLInputElement>(null);
+
+    const checkFileFormat = (file: File) => {
+        return file.type === "text/csv" || file.name.endsWith(".csv");
+    };
+
+    const handleUrlChange = (e: ChangeEvent<HTMLInputElement>) => {
+        setFormData({ ...formData, url: e.target.value });
+    };
+
+    const handleFileChange = (e: ChangeEvent<HTMLInputElement>) => {
+        const file = e.target.files ? e.target.files[0] : null;
+
+        if (file) {
+            setFormData({ ...formData, file: file, error: null });
+        }
+    };
+
+    /**
+     * PapaParseを使用してCSVファイルから「案件ID」を抽出する
+     */
+    const extractProjectIDs = (file: File): Promise<string[]> => {
+        return new Promise((resolve, reject) => {
+            Papa.parse(file, {
+                header: true, // 1行目をヘッダーとして扱い、オブジェクトの配列で返す
+                skipEmptyLines: true,
+                encoding: "Shift_JIS", // 日本語CSVのデファクトスタンダードであるShift_JISを試行
+
+                complete: (results) => {
+                    // results.dataは Record<string, any>[] 型
+                    const data = results.data as Record<string, any>[];
+
+                    if (!data || data.length === 0) {
+                        // パースが成功したがデータが空の場合
+                        reject(
+                            new Error(
+                                "CSV file is empty or could not be parsed."
+                            )
+                        );
+                        return;
+                    }
+
+                    // ヘッダー名 "案件ID" を探す（trim()で前後の空白を除去）
+                    const headerKeys = Object.keys(data[0]);
+                    const projectIDKey = headerKeys.find(
+                        (key) => key.trim() === "案件ID"
+                    );
+
+                    if (!projectIDKey) {
+                        reject(
+                            new Error(
+                                "CSV file does not contain a column named '案件ID'. Please ensure the header is correct."
+                            )
+                        );
+                        return;
+                    }
+
+                    // 「案件ID」列の値を全て抽出し、空文字列をフィルタリング
+                    const projectIDList = data
+                        .map((row) =>
+                            row[projectIDKey]
+                                ? String(row[projectIDKey]).trim()
+                                : ""
+                        )
+                        .filter((id) => id);
+
+                    resolve(projectIDList);
+                },
+                error: (error) => {
+                    // パースエラー発生時
+                    reject(new Error(`CSV parsing failed: ${error.message}`));
+                },
+            });
+        });
+    };
+
+    const sendForm = async (e: FormEvent<HTMLFormElement>) => {
+        e.preventDefault();
+
+        if (!formData.file) {
+            setFormData({
+                ...formData,
+                error: "File is not selected.",
+            });
+            return;
+        }
+
+        if (!checkFileFormat(formData.file)) {
+            setFormData({
+                ...formData,
+                error: "Error: The selected file is not in CSV format. Please select a CSV file.",
+            });
+            if (fileInputRef.current) {
+                fileInputRef.current.value = "";
+            }
+            setFormData((prev) => ({
+                ...prev,
+                file: null,
+                projectIDList: null,
+            }));
+            return;
+        }
+
+        setFormData({
+            ...formData,
+            error: "Processing CSV file...",
+            projectIDList: null,
+        });
+
+        let extractedProjectIDs: string[] = [];
+        try {
+            // 🌟 PapaParseによる抽出を実行
+            extractedProjectIDs = await extractProjectIDs(formData.file);
+            console.log("Extracted Project ID List:", extractedProjectIDs);
+        } catch (error) {
+            setFormData({
+                ...formData,
+                error:
+                    error instanceof Error
+                        ? error.message
+                        : "An unknown error occurred during file processing.",
+            });
+            if (fileInputRef.current) {
+                fileInputRef.current.value = "";
+            }
+            setFormData((prev) => ({ ...prev, file: null }));
+            return;
+        }
+
+        setFormData((prev) => ({
+            ...prev,
+            projectIDList: extractedProjectIDs,
+            error: "Sending information to the backend...",
+        }));
+
+        const postData = {
+            url: formData.url,
+            projectIDList: extractedProjectIDs,
+        };
+        console.log("Data to be sent to the backend:", postData);
+
+        // 実際のPOST通信を行う場合は、以下のシミュレーション部分をfetch APIなどに置き換えてください。
+        setTimeout(() => {
+            setFormData({
+                file: null,
+                url: "",
+                projectIDList: null,
+                error: "(Simulation) File sent successfully!",
+            });
+            if (fileInputRef.current) {
+                fileInputRef.current.value = "";
+            }
+        }, 3000);
+    };
+
+    return (
+        <div>
+            <div>
+                <h1>掲載終了企業 グレーアウトフォーム</h1>
+                <p>
+                    掲載終了した企業の一覧をcsv形式でアップロードし、処理対象のURLを入力してください。
+                </p>
+
+                {formData.error && (
+                    <p
+                        style={{
+                            color: formData.error.includes("Error")
+                                ? "red"
+                                : "green",
+                        }}
+                    >
+                        {formData.error}
+                    </p>
+                )}
+                {formData.projectIDList &&
+                    formData.projectIDList.length > 0 && (
+                        <p style={{ color: "blue" }}>
+                            Project ID Count: {formData.projectIDList.length}{" "}
+                            items (Ready to send)
+                        </p>
+                    )}
+
+                <form onSubmit={sendForm}>
+                    <label htmlFor="target_url">処理対象URL：</label>
+                    <input
+                        type="url"
+                        id="target_url"
+                        name="target_url"
+                        required
+                        value={formData.url}
+                        onChange={handleUrlChange}
+                        placeholder="例: https://example.com/target"
+                    />
+                    <br />
+                    <br />
+
+                    <label htmlFor="csv_file">CSVファイルを選択:</label>
+                    <input
+                        type="file"
+                        id="csv_file"
+                        name="csv_file"
+                        accept=".csv"
+                        required
+                        onChange={handleFileChange}
+                        ref={fileInputRef}
+                    />
+                    <br />
+                    <br />
+
+                    <button
+                        type="submit"
+                        disabled={!formData.file || !formData.url}
+                    >
+                        送信
+                    </button>
+                </form>
+            </div>
         </div>
-        <div className="flex flex-col gap-4 text-base font-medium sm:flex-row">
-          <a
-            className="flex h-12 w-full items-center justify-center gap-2 rounded-full bg-foreground px-5 text-background transition-colors hover:bg-[#383838] dark:hover:bg-[#ccc] md:w-[158px]"
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            <Image
-              className="dark:invert"
-              src="/vercel.svg"
-              alt="Vercel logomark"
-              width={16}
-              height={16}
-            />
-            Deploy Now
-          </a>
-          <a
-            className="flex h-12 w-full items-center justify-center rounded-full border border-solid border-black/[.08] px-5 transition-colors hover:border-transparent hover:bg-black/[.04] dark:border-white/[.145] dark:hover:bg-[#1a1a1a] md:w-[158px]"
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Documentation
-          </a>
-        </div>
-      </main>
-    </div>
-  );
+    );
 }
