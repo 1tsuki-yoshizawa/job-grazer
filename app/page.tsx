@@ -5,7 +5,6 @@ import Papa from "papaparse";
 
 interface FormDataState {
     file: File | null;
-    url: string;
     error: string | null;
     projectIDList: string[] | null;
 }
@@ -13,7 +12,6 @@ interface FormDataState {
 export default function Home() {
     const [formData, setFormData] = useState<FormDataState>({
         file: null,
-        url: "",
         error: null,
         projectIDList: null,
     });
@@ -21,10 +19,6 @@ export default function Home() {
 
     const checkFileFormat = (file: File) => {
         return file.type === "text/csv" || file.name.endsWith(".csv");
-    };
-
-    const handleUrlChange = (e: ChangeEvent<HTMLInputElement>) => {
-        setFormData({ ...formData, url: e.target.value });
     };
 
     const handleFileChange = (e: ChangeEvent<HTMLInputElement>) => {
@@ -153,7 +147,6 @@ export default function Home() {
         }));
 
         const postData = {
-            url: formData.url,
             projectIDList: extractedProjectIDs,
         };
         console.log("Data to be sent to the backend:", postData);
@@ -173,9 +166,8 @@ export default function Home() {
         setTimeout(() => {
             setFormData({
                 file: null,
-                url: "",
-                projectIDList: null,
                 error: "(Simulation) File sent successfully!",
+                projectIDList: null,
             });
             if (fileInputRef.current) {
                 fileInputRef.current.value = "";
@@ -188,7 +180,7 @@ export default function Home() {
             <div>
                 <h1>掲載終了企業 グレーアウトフォーム</h1>
                 <p>
-                    掲載終了した企業の一覧をcsv形式でアップロードし、処理対象のURLを入力してください。
+                    掲載終了した企業の一覧をcsv形式でアップロードしてください。
                 </p>
 
                 {formData.error && (
@@ -211,19 +203,6 @@ export default function Home() {
                     )}
 
                 <form onSubmit={sendForm}>
-                    <label htmlFor="target_url">スプレッドシートID：</label>
-                    <input
-                        type="url"
-                        id="target_url"
-                        name="target_url"
-                        required
-                        value={formData.url}
-                        onChange={handleUrlChange}
-                        placeholder="例: https://example.com/target"
-                    />
-                    <br />
-                    <br />
-
                     <label htmlFor="csv_file">CSVファイルを選択:</label>
                     <input
                         type="file"
@@ -237,10 +216,7 @@ export default function Home() {
                     <br />
                     <br />
 
-                    <button
-                        type="submit"
-                        disabled={!formData.file || !formData.url}
-                    >
+                    <button type="submit" disabled={!formData.file}>
                         送信
                     </button>
                 </form>
