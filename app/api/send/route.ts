@@ -19,12 +19,24 @@ if (!serviceAccountKey) {
 }
 
 // 認証情報をパース
+// 認証情報をパース
 let parsedCredentials: any;
 try {
-    // 🌟 修正ポイント: ここで安全にパースを実行
-    parsedCredentials = JSON.parse(serviceAccountKey);
+    // -------------------------------------------------------------------
+    // 🛠️ 修正ポイント: Base64デコードを試みる
+    // .envファイルでの改行・特殊文字のエスケープ問題を回避するため、
+    // 環境変数をBase64エンコードされたJSONと仮定します。
+    const decodedKey = Buffer.from(serviceAccountKey, "base64").toString(
+        "utf8"
+    );
+    parsedCredentials = JSON.parse(decodedKey);
+    // -------------------------------------------------------------------
 } catch (e) {
-    throw new Error("Failed to parse GOOGLE_SERVICE_ACCOUNT_KEY as JSON.");
+    // パース失敗時、エラーメッセージをより具体的に出力します
+    console.error("Original parsing error:", e);
+    throw new Error(
+        "Failed to parse GOOGLE_SERVICE_ACCOUNT_KEY as JSON. Ensure the entire JSON content is correctly Base64 encoded in your .env.local file."
+    );
 }
 
 export async function POST(request: NextRequest) {
