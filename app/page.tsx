@@ -158,6 +158,17 @@ export default function Home() {
         };
         console.log("Data to be sent to the backend:", postData);
 
+        const response = await fetch("/api/send", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+                extractedProjectIDs,
+                googleSpreadSheetID:
+                    "1tffj9QL7Z8CNIuX7p8_4sy-ezynSCcHc-IUJQGy9p3E",
+                sheetName: "求人リスト_20251121(マスター)",
+            }),
+        });
+
         // 実際のPOST通信を行う場合は、以下のシミュレーション部分をfetch APIなどに置き換えてください。
         setTimeout(() => {
             setFormData({
@@ -200,7 +211,7 @@ export default function Home() {
                     )}
 
                 <form onSubmit={sendForm}>
-                    <label htmlFor="target_url">処理対象URL：</label>
+                    <label htmlFor="target_url">スプレッドシートID：</label>
                     <input
                         type="url"
                         id="target_url"
